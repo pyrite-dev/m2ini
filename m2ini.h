@@ -255,7 +255,7 @@ MIDEF mi_ini_t* mi_get_section(mi_ini_t* ini, const char* name) {
 
 MIDEF char* mi_string(mi_ini_t* ini) {
 	int   i;
-	int   p = 0;
+	int   p;
 	char* r;
 
 	if(ini->type == MI_KV) {
@@ -274,22 +274,22 @@ MIDEF char* mi_string(mi_ini_t* ini) {
 		mi_strcat(&r, ini->key);
 		mi_strcat(&r, "]\n");
 	}
-mi_repeat:;
-	for(i = 0; ini->child[i] != NULL; i++) {
-		mi_ini_t* c = ini->child[i];
-		if(p == 0 && c->type == MI_KV) {
-			char* t = mi_string(c);
-			mi_strcat(&r, t);
-			mi_strcat(&r, "\n");
-			free(t);
-		} else if(p == 1 && c->type == MI_SECTION) {
-			char* t = mi_string(c);
-			mi_strcat(&r, t);
-			mi_strcat(&r, "\n");
-			free(t);
+	for(p = 0; p < 2; p++) {
+		for(i = 0; ini->child[i] != NULL; i++) {
+			mi_ini_t* c = ini->child[i];
+			if(p == 0 && c->type == MI_KV) {
+				char* t = mi_string(c);
+				mi_strcat(&r, t);
+				mi_strcat(&r, "\n");
+				free(t);
+			} else if(p == 1 && c->type == MI_SECTION) {
+				char* t = mi_string(c);
+				mi_strcat(&r, t);
+				free(t);
+			}
 		}
+		if(p == 0) mi_strcat(&r, "\n");
 	}
-	if((p++) == 0) goto mi_repeat;
 
 	return r;
 }
