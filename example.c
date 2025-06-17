@@ -7,6 +7,8 @@ int main() {
 		mi_ini_t* r = mi_get_kv(ini, "abc");
 		printf("%s\n", r->value);
 
+		printf("%s\n", mi_string(ini));
+
 		mi_free(ini);
 		return 0;
 	}

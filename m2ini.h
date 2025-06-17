@@ -135,6 +135,14 @@ MIDEF mi_ini_t* mi_get_kv(mi_ini_t* ini, const char* key);
  */
 MIDEF mi_ini_t* mi_get_section(mi_ini_t* ini, const char* name);
 
+/**
+ * @~english
+ * @brief Stringify INI
+ * @param ini INI
+ * @return String
+ */
+MIDEF char* mi_string(mi_ini_t* ini);
+
 #ifdef M2INI_IMPLEMENTATION
 #include <stdio.h>
 #include <stdlib.h>
@@ -232,6 +240,33 @@ MIDEF mi_ini_t* mi_get_section(mi_ini_t* ini, const char* name) {
 		mi_ini_t* c = ini->child[i];
 		if(c->type == MI_SECTION && strcmp(c->key, name) == 0) return c;
 	}
+	return NULL;
+}
+
+MIDEF char* mi_string(mi_ini_t* ini) {
+	int i;
+	int p = 0;
+
+	if(ini->type == MI_KV) {
+		char* s = malloc(strlen(ini->key) + 1 + strlen(ini->value) + 1);
+		s[0]	= 0;
+		strcat(s, ini->key);
+		strcat(s, "=");
+		strcat(s, ini->value);
+		return s;
+	}
+
+	if(ini->type == MI_SECTION) {
+	}
+	for(i = 0; ini->child[i] != NULL; i++) {
+		mi_ini_t* c = ini->child[i];
+		if(p == 0 && c->type == MI_KV) {
+			mi_string(c);
+		} else if(p == 1 && c->type == MI_SECTION) {
+			mi_string(c);
+		}
+	}
+
 	return NULL;
 }
 
