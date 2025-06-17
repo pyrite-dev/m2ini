@@ -179,6 +179,16 @@ static char* mi_strdup_trim(const char* str) {
 	return r;
 }
 
+static void mi_strcat(char** s, const char* a) {
+	char* old = *s;
+	char* r	  = malloc(strlen(old) + strlen(a) + 1);
+	r[0]	  = 0;
+	strcat(r, old);
+	strcat(r, a);
+	free(old);
+	*s = r;
+}
+
 MIDEF void mi_set_key(mi_ini_t* ini, const char* key) {
 	if(ini->key != NULL) free(ini->key);
 	ini->key = malloc(strlen(key) + 1);
@@ -244,8 +254,9 @@ MIDEF mi_ini_t* mi_get_section(mi_ini_t* ini, const char* name) {
 }
 
 MIDEF char* mi_string(mi_ini_t* ini) {
-	int i;
-	int p = 0;
+	int   i;
+	int   p = 0;
+	char* r;
 
 	if(ini->type == MI_KV) {
 		char* s = malloc(strlen(ini->key) + 1 + strlen(ini->value) + 1);
@@ -256,18 +267,31 @@ MIDEF char* mi_string(mi_ini_t* ini) {
 		return s;
 	}
 
+	r    = malloc(1);
+	r[0] = 0;
 	if(ini->type == MI_SECTION) {
+		mi_strcat(&r, "[");
+		mi_strcat(&r, ini->key);
+		mi_strcat(&r, "]\n");
 	}
+mi_repeat:;
 	for(i = 0; ini->child[i] != NULL; i++) {
 		mi_ini_t* c = ini->child[i];
 		if(p == 0 && c->type == MI_KV) {
-			mi_string(c);
+			char* t = mi_string(c);
+			mi_strcat(&r, t);
+			mi_strcat(&r, "\n");
+			free(t);
 		} else if(p == 1 && c->type == MI_SECTION) {
-			mi_string(c);
+			char* t = mi_string(c);
+			mi_strcat(&r, t);
+			mi_strcat(&r, "\n");
+			free(t);
 		}
 	}
+	if((p++) == 0) goto mi_repeat;
 
-	return NULL;
+	return r;
 }
 
 MIDEF mi_ini_t* mi_parse(const char* data, size_t size) {
