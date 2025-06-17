@@ -309,7 +309,16 @@ MIDEF mi_ini_t* mi_parse_file(const char* path) {
 	return NULL;
 }
 
-MIDEF void mi_free(mi_ini_t* ini) { free(ini); }
+MIDEF void mi_free(mi_ini_t* ini) {
+	int i;
+	for(i = 0; ini->child[i] != NULL; i++) {
+		mi_free(ini->child[i]);
+	}
+	free(ini->child);
+	if(ini->key != NULL) free(ini->key);
+	if(ini->value != NULL) free(ini->value);
+	free(ini);
+}
 
 #endif
 
