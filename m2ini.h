@@ -33,8 +33,22 @@ extern "C" {
 #else
 #endif
 
-typedef struct mi_ini {
-} mi_ini_t;
+#define mi_ini_t struct mi_ini
+
+mi_ini_t;
+
+struct mi_ini {
+	mi_ini_t** child;
+	int	   type;
+	char*	   key;
+	char*	   value;
+};
+
+enum MI_TYPE {
+	MI_ROOT = 0,
+	MI_SECTION,
+	MI_KV
+};
 
 /**
  * @~english
@@ -46,17 +60,231 @@ typedef struct mi_ini {
 MIDEF mi_ini_t* mi_parse(const char* data, size_t size);
 
 /**
- * @~english Parse INI
+ * @~english
+ * @brief Parse INI
  * @param path Path
  * @return Parsed result
  */
 MIDEF mi_ini_t* mi_parse_file(const char* path);
 
+/**
+ * @~english
+ * @brief Free INI
+ * @param ini INI
+ */
+MIDEF void mi_free(mi_ini_t* ini);
+
+/**
+ * @~english
+ * @brief Create new INI
+ * @return INI
+ */
+MIDEF mi_ini_t* mi_new(void);
+
+/**
+ * @~english
+ * @brief Create new key-value pair
+ * @param ini INI
+ * @param key Key
+ * @param value Value
+ * @return Key-value pair
+ */
+MIDEF mi_ini_t* mi_new_kv(mi_ini_t* ini, const char* key, const char* value);
+
+/**
+ * @~english
+ * @brief Create new section
+ * @param ini INI
+ * @param name Name
+ * @return Section
+ */
+MIDEF mi_ini_t* mi_new_section(mi_ini_t* ini, const char* name);
+
+/**
+ * @~english
+ * @brief Set key
+ * @param ini INI
+ * @param key Key
+ */
+MIDEF void mi_set_key(mi_ini_t* ini, const char* key);
+#define mi_set_name mi_set_key
+
+/**
+ * @~english
+ * @brief Set value
+ * @param ini INI
+ * @param value Value
+ */
+MIDEF void mi_set_value(mi_ini_t* ini, const char* value);
+
+/**
+ * @~english
+ * @brief Get key-value pair
+ * @param ini INI
+ * @param key Key
+ * @return Key-value pair
+ */
+MIDEF mi_ini_t* mi_get_kv(mi_ini_t* ini, const char* key);
+
+/**
+ * @~english
+ * @brief Get section
+ * @param ini INI
+ * @param name Name
+ * @return Section
+ */
+MIDEF mi_ini_t* mi_get_section(mi_ini_t* ini, const char* name);
+
 #ifdef M2INI_IMPLEMENTATION
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-MIDEF mi_ini_t* mi_parse(const char* data, size_t size) {}
+/* add src to ini */
+static void mi_add(mi_ini_t* ini, mi_ini_t* src) {
+	mi_ini_t** old = ini->child;
+	int	   i;
+	for(i = 0; old[i] != NULL; i++);
+	ini->child = malloc(sizeof(*ini->child) * (i + 2));
+	for(i = 0; old[i] != NULL; i++) ini->child[i] = old[i];
+	ini->child[i]	  = src;
+	ini->child[i + 1] = NULL;
+	free(old);
+}
+
+static char* mi_strdup_trim(const char* str) {
+	char* r = malloc(strlen(str) + 1);
+	int   i;
+	r[0] = 0;
+	for(i = 0; str[i] != 0; i++) {
+		if(str[i] != ' ') {
+			strcpy(r, str + i);
+			break;
+		}
+	}
+	for(i = strlen(r) - 1; i >= 0; i--) {
+		if(r[i] != ' ') {
+			break;
+		}
+		r[i] = 0;
+	}
+	return r;
+}
+
+MIDEF void mi_set_key(mi_ini_t* ini, const char* key) {
+	if(ini->key != NULL) free(ini->key);
+	ini->key = malloc(strlen(key) + 1);
+	strcpy(ini->key, key);
+}
+
+MIDEF void mi_set_value(mi_ini_t* ini, const char* value) {
+	if(ini->value != NULL) free(ini->value);
+	ini->value = malloc(strlen(value) + 1);
+	strcpy(ini->value, value);
+}
+
+MIDEF mi_ini_t* mi_new(void) {
+	mi_ini_t* ini = malloc(sizeof(*ini));
+	memset(ini, 0, sizeof(*ini));
+	ini->type = MI_ROOT;
+
+	ini->child    = malloc(sizeof(*ini->child));
+	ini->child[0] = NULL;
+
+	return ini;
+}
+
+MIDEF mi_ini_t* mi_new_kv(mi_ini_t* ini, const char* key, const char* value) {
+	mi_ini_t* r = mi_new();
+	r->type	    = MI_KV;
+
+	mi_set_key(r, key);
+	mi_set_value(r, value);
+
+	mi_add(ini, r);
+
+	return r;
+}
+
+MIDEF mi_ini_t* mi_new_section(mi_ini_t* ini, const char* name) {
+	mi_ini_t* r = mi_new();
+	r->type	    = MI_SECTION;
+
+	mi_set_name(r, name);
+
+	mi_add(ini, r);
+
+	return r;
+}
+
+MIDEF mi_ini_t* mi_get_kv(mi_ini_t* ini, const char* key) {
+	int i;
+	for(i = 0; ini->child[i] != NULL; i++) {
+		mi_ini_t* c = ini->child[i];
+		if(c->type == MI_KV && strcmp(c->key, key) == 0) return c;
+	}
+	return NULL;
+}
+
+MIDEF mi_ini_t* mi_get_section(mi_ini_t* ini, const char* name) {
+	int i;
+	for(i = 0; ini->child[i] != NULL; i++) {
+		mi_ini_t* c = ini->child[i];
+		if(c->type == MI_SECTION && strcmp(c->key, name) == 0) return c;
+	}
+	return NULL;
+}
+
+MIDEF mi_ini_t* mi_parse(const char* data, size_t size) {
+	size_t	  i;
+	mi_ini_t* ini	  = mi_new();
+	mi_ini_t* current = ini;
+	char*	  buf	  = malloc(size + 1);
+	int	  incr	  = 0;
+	memcpy(buf, data, size);
+	buf[size] = 0;
+
+	for(i = 0; i <= size; i++) {
+		if(i == size || buf[i] == '\n') {
+			int   j;
+			char* line = buf + incr;
+			int   eq   = -1;
+			buf[i]	   = 0;
+
+			for(j = 0; line[j] != 0; j++) {
+				if(line[j] == '\r') {
+					line[j] = 0;
+					break;
+				} else if(line[j] == '=') {
+					eq = j;
+				}
+			}
+			if(strlen(line) > 0) {
+				if(eq >= 0) {
+					char* key;
+					char* value;
+					line[eq] = 0;
+					key	 = mi_strdup_trim(line);
+					value	 = mi_strdup_trim(line + eq + 1);
+
+					mi_new_kv(current, key, value);
+
+					free(value);
+					free(key);
+				} else if(strlen(line) >= 2 && line[0] == '[' && line[strlen(line) - 1] == ']') {
+					line[strlen(line) - 1] = 0;
+					current		       = mi_new_section(ini, line + 1);
+				}
+			}
+
+			incr = i + 1;
+			if(i == size) break;
+		}
+	}
+	free(buf);
+
+	return ini;
+}
 
 MIDEF mi_ini_t* mi_parse_file(const char* path) {
 	FILE* f = fopen(path, "rb");
@@ -80,6 +308,8 @@ MIDEF mi_ini_t* mi_parse_file(const char* path) {
 	}
 	return NULL;
 }
+
+MIDEF void mi_free(mi_ini_t* ini) { free(ini); }
 
 #endif
 
